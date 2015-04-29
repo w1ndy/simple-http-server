@@ -7,6 +7,7 @@ typedef void (*alarm_handler_t)(void *data);
 
 typedef struct tag_alarm_queue
 {
+    int id;
     struct timespec sched_time;
     alarm_handler_t handler;
     void *data;
@@ -14,7 +15,8 @@ typedef struct tag_alarm_queue
 } alarm_queue_t;
 
 void alarm_init();
-void alarm_set(int seconds, alarm_handler_t handler, void *data);
+int  alarm_set(int seconds, alarm_handler_t handler, void *data);
+void alarm_cancel(int alarm_id);
 void alarm_close();
 void alarm_close_wait();
 
