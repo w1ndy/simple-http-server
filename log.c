@@ -87,4 +87,5 @@ void log_close()
 {
     if(flog)
         fclose(flog);
+    flog = NULL;
 }

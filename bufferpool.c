@@ -19,10 +19,9 @@ bufferpool_t *bufferpool_create(int size_per_block)
     pool->block_cnt = DEFAULT_ALLOCATED_BLOCKS;
     pool->block_size = size_per_block;
     pool->alloc_index = rbtree_init();
-
-    int i;
-    for(i = 0; i < DEFAULT_ALLOCATED_BLOCKS; i++) {
-    }
+    pthread_mutex_init(&pool->lock, 0);
+    bufferpool_make_n(pool, DEFAULT_ALLOCATED_BLOCKS);
+    return pool;
 }
 
 int bufferpool_make(bufferpool_t *pool)
@@ -59,31 +58,39 @@ void *bufferpool_alloc(bufferpool_t *pool)
 {
     unsigned int hash;
     buf_block_t *b, *prev;
-    if(pool->free_chain) {
-        b = pool->free_chain;
-        pool->free_chain = b->free_next;
-        b->free_next = NULL;
-        hash = rbtree_hash_mem((unsigned char *)(&b->data), sizeof(void *));
-        prev = rbtree_find(pool->alloc_index, hash);
-        if(prev != NULL)
-            b->free_next = prev;
-        pool->alloc_index = rbtree_insert(pool->alloc_index, hash, b);
-        return b->data;
+    if(!pool->free_chain) {
+        int cnt;
+        if(pool->block_cnt < DOUBLE_THRESHOLD) {
+            cnt = bufferpool_make_n(pool, pool->block_cnt);
+        } else {
+            cnt = bufferpool_make_n(pool, DOUBLE_THRESHOLD);
+        }
+
+        if(!cnt) {
+            ERROR("insufficient memory");
+            return NULL;
+        }
+        pool->block_cnt += cnt;
     }
 
-    int cnt;
-    if(pool->block_cnt < DOUBLE_THRESHOLD) {
-        cnt = bufferpool_make_n(pool, pool->block_cnt);
-    } else {
-        cnt = bufferpool_make_n(pool, DOUBLE_THRESHOLD);
-    }
+    b = pool->free_chain;
+    pool->free_chain = b->free_next;
+    b->free_next = NULL;
+    hash = rbtree_hash_mem((unsigned char *)(&b->data), sizeof(void *));
+    prev = rbtree_find(pool->alloc_index, hash);
+    if(prev != NULL)
+        b->free_next = prev;
+    pool->alloc_index = rbtree_insert(pool->alloc_index, hash, b);
+    return b->data;
+}
 
-    if(!cnt) {
-        ERROR("insufficient memory");
-        return NULL;
-    }
-    pool->block_cnt += cnt;
-    return bufferpool_alloc(pool);
+void *bufferpool_alloc_threadsafe(bufferpool_t *pool)
+{
+    void *buf;
+    pthread_mutex_lock(&pool->lock);
+    buf = bufferpool_alloc(pool);
+    pthread_mutex_unlock(&pool->lock);
+    return buf;
 }
 
 void bufferpool_dealloc(bufferpool_t *pool, void *buf)
@@ -107,6 +114,13 @@ void bufferpool_dealloc(bufferpool_t *pool, void *buf)
     }
 }
 
+void bufferpool_dealloc_threadsafe(bufferpool_t *pool, void *buf)
+{
+    pthread_mutex_lock(&pool->lock);
+    bufferpool_dealloc(pool, buf);
+    pthread_mutex_unlock(&pool->lock);
+}
+
 void bufferpool_free(bufferpool_t *pool)
 {
     if(pool->alloc_index != NULL) {
@@ -120,6 +134,7 @@ void bufferpool_free(bufferpool_t *pool)
         free(b->data);
         free(b);
     }
+    pthread_mutex_destroy(&pool->lock);
     free(pool);
 }
 

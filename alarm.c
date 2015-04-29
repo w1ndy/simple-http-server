@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "log.h"
+#include "bufferpool.h"
 
 alarm_queue_t *queue;
 alarm_queue_t new_alarm;
@@ -21,7 +22,8 @@ pthread_mutex_t alarm_mutex, main_mutex;
 void *alarm_main(void *param)
 {
     alarm_queue_t *s, *p;
-    int err, assigned_id = 0;
+    int err;
+    bufferpool_t *pool = bufferpool_create(sizeof(alarm_queue_t));
 
     INFO("alarm thread has been spawned");
     pthread_mutex_lock(&alarm_mutex);
@@ -43,20 +45,20 @@ void *alarm_main(void *param)
             queue->handler(queue->data);
             s = queue;
             queue = queue->next;
-            free(s);
+            bufferpool_dealloc(pool, s);
         } else if(!err) {
             if(!thread_close) {
-                if(cancel_alarm > 0) {
+                if(cancel_alarm >= 0) {
                     DEBUG("cancelling alarm %d", cancel_alarm);
                     p = queue;
                     while(p && p->id != cancel_alarm) s = p, p = p->next;
                     if(p) {
                         if(p == queue) {
                             queue = queue->next;
-                            free(p);
+                            bufferpool_dealloc(pool, p);
                         } else {
                             s->next = p->next;
-                            free(p);
+                            bufferpool_dealloc(pool, p);
                         }
                     }
                 } else {
@@ -67,9 +69,8 @@ void *alarm_main(void *param)
                     if(!queue ||
                             queue->sched_time.tv_sec >
                             new_alarm.sched_time.tv_sec) {
-                        s = (alarm_queue_t *)malloc(sizeof(alarm_queue_t));
+                        s = (alarm_queue_t *)bufferpool_alloc(pool);
                         memcpy(s, &new_alarm, sizeof(alarm_queue_t));
-                        s->id = ++assigned_id;
                         s->next = queue;
                         queue = s;
                     } else {
@@ -77,9 +78,8 @@ void *alarm_main(void *param)
                         while(s &&
                                 s->sched_time.tv_sec < new_alarm.sched_time.tv_sec)
                             p = s, s = s->next;
-                        s = (alarm_queue_t *)malloc(sizeof(alarm_queue_t));
+                        s = (alarm_queue_t *)bufferpool_alloc(pool);
                         memcpy(s, &new_alarm, sizeof(alarm_queue_t));
-                        s->id = ++assigned_id;
                         s->next = p->next;
                         p->next = s;
                     }
@@ -114,25 +114,20 @@ void alarm_init()
     }
 }
 
-int alarm_set(int seconds, alarm_handler_t handler, void *data)
+void alarm_set(int id, int seconds, alarm_handler_t handler, void *data)
 {
     DEBUG("trying to set an alarm in %d seconds", seconds);
     clock_gettime(CLOCK_REALTIME, &(new_alarm.sched_time));
+    new_alarm.id = id;
     new_alarm.sched_time.tv_sec += seconds;
     new_alarm.handler = handler;
     new_alarm.data = data;
 
-    DEBUG("locking alarm mutex");
     pthread_mutex_lock(&alarm_mutex);
-    DEBUG("signalling new alarm");
     pthread_cond_signal(&new_alarm_cond);
-    DEBUG("locking main mutex");
     pthread_mutex_lock(&main_mutex);
-    DEBUG("unlocking alarm mutex");
     pthread_mutex_unlock(&alarm_mutex);
-    DEBUG("waiting alarm set condition");
     pthread_cond_wait(&alarm_set_cond, &main_mutex);
-    DEBUG("unlock main mutex");
     pthread_mutex_unlock(&main_mutex);
 
     return alarm_id;
@@ -142,17 +137,11 @@ void alarm_cancel(int alarm_id)
 {
     cancel_alarm = alarm_id;
 
-    DEBUG("locking alarm mutex");
     pthread_mutex_lock(&alarm_mutex);
-    DEBUG("signalling new alarm");
     pthread_cond_signal(&new_alarm_cond);
-    DEBUG("locking main mutex");
     pthread_mutex_lock(&main_mutex);
-    DEBUG("unlocking alarm mutex");
     pthread_mutex_unlock(&alarm_mutex);
-    DEBUG("waiting alarm set condition");
     pthread_cond_wait(&alarm_set_cond, &main_mutex);
-    DEBUG("unlock main mutex");
     pthread_mutex_unlock(&main_mutex);
 
     cancel_alarm = -1;

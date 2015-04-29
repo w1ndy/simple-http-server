@@ -81,6 +81,9 @@ int net_create(async_net_t **asnet, const char *port)
         return err;
     }
 
+    int enable = 1;
+    setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int));
+
     err = unblock_fd(sock_fd);
     if(err) {
         ERROR("cannot unblock socket");

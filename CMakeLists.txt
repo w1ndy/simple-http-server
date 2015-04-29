@@ -12,7 +12,8 @@ set (HDRS
         asnet.h
         alarm.h
         rbtree.h
-        bufferpool.h)
+        bufferpool.h
+        conn.h)
 
 set (SRCS
         main.c
@@ -20,7 +21,8 @@ set (SRCS
         asnet.c
         alarm.c
         rbtree.c
-        bufferpool.c)
+        bufferpool.c
+        conn.c)
 
 add_executable (httpsrv ${HDRS} ${SRCS})
 target_link_libraries (httpsrv ${CMAKE_THREAD_LIBS_INIT})

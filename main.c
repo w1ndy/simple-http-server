@@ -1,16 +1,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <signal.h>
 
 #include "log.h"
 #include "asnet.h"
 #include "alarm.h"
 #include "rbtree.h"
-#include "bufferpool.h"
+#include "conn.h"
 
-void duckduckduck(void *eat)
+async_net_t *net;
+
+void sig_handler(int n)
 {
-    printf("duck is eating!");
+    alarm_close();
+    connmgr_close();
+    net_free(&net);
+    log_close();
+    exit(0);
 }
 
 int main(int argc, char *argv[])
@@ -25,20 +32,16 @@ int main(int argc, char *argv[])
     //rbtree_key_value_test(RBTREE_TEST_MAX_KEY, 50);
     //rbtree_stress_test(1000000);
     //test_rbtree_case();
-    /*alarm_init();
-    alarm_set(5, duckduckduck, 0);
-    alarm_set(2, duckduckduck, 0);
-    alarm_set(4, duckduckduck, 0);
-    alarm_set(6, duckduckduck, 0);
-    alarm_set(1, duckduckduck, 0);
-    alarm_set(5, duckduckduck, 0);
-    async_net_t *net;
-    if(net_create(&net, "80"))
+    signal(SIGINT, sig_handler);
+    alarm_init();
+    if(net_create(&net, "8080"))
         return -1;
+    connmgr_init(net);
     while(1)
         net_process(net, -1);
+    connmgr_close();
     net_free(&net);
     alarm_close();
-    log_close();*/
+    log_close();
     return 0;
 }

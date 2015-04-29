@@ -15,7 +15,7 @@ typedef struct tag_alarm_queue
 } alarm_queue_t;
 
 void alarm_init();
-int  alarm_set(int seconds, alarm_handler_t handler, void *data);
+void alarm_set(int id, int seconds, alarm_handler_t handler, void *data);
 void alarm_cancel(int alarm_id);
 void alarm_close();
 void alarm_close_wait();
