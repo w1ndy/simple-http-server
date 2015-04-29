@@ -10,13 +10,15 @@ set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set (HDRS
         log.h
         asnet.h
-        alarm.h)
+        alarm.h
+        rbtree.h)
 
 set (SRCS
         main.c
         log.c
         asnet.c
-        alarm.c)
+        alarm.c
+        rbtree.c)
 
 add_executable (httpsrv ${HDRS} ${SRCS})
 target_link_libraries (httpsrv ${CMAKE_THREAD_LIBS_INIT})

@@ -21,7 +21,7 @@ void *alarm_main(void *param)
     alarm_queue_t *s, *p;
     int err;
 
-    DEBUG("alarm thread has been spawned");
+    INFO("alarm thread has been spawned");
     pthread_mutex_lock(&alarm_mutex);
     do {
         struct timespec ts;
@@ -100,11 +100,17 @@ void alarm_set(int seconds, alarm_handler_t handler, void *data)
     new_alarm.handler = handler;
     new_alarm.data = data;
 
+    DEBUG("locking alarm mutex");
     pthread_mutex_lock(&alarm_mutex);
+    DEBUG("signalling new alarm");
     pthread_cond_signal(&new_alarm_cond);
+    DEBUG("locking main mutex");
     pthread_mutex_lock(&main_mutex);
+    DEBUG("unlocking alarm mutex");
     pthread_mutex_unlock(&alarm_mutex);
+    DEBUG("waiting alarm set condition");
     pthread_cond_wait(&alarm_set_cond, &main_mutex);
+    DEBUG("unlock main mutex");
     pthread_mutex_unlock(&main_mutex);
 }
 
