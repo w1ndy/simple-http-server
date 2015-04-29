@@ -29,6 +29,7 @@ void          *rbtree_find(rbtree_t root, int key);
 void           rbtree_free(rbtree_t root);
 void           rbtree_print(rbtree_t root);
 unsigned int   rbtree_hash_string(const char *s);
+unsigned int   rbtree_hash_mem(const unsigned char *s, unsigned int size);
 
 void           rbtree_random_test(int test_rounds, int key_range,
                                   int add_times, int remove_times,

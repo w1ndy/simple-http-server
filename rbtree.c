@@ -5,6 +5,7 @@
 #include <string.h>
 #include <time.h>
 #include <assert.h>
+#include <memory.h>
 
 rbtree_node_t *rbtree_new_node(int key, void *data, int color)
 {
@@ -131,21 +132,26 @@ rbtree_node_t *rbtree_insert_adjust(rbtree_node_t *root, rbtree_node_t *node)
 
 rbtree_node_t *rbtree_insert(rbtree_node_t *root, int key, void *data)
 {
-    rbtree_node_t *new_node = rbtree_new_node(key, data, RBTREE_RED);
+    rbtree_node_t *new_node;
     if(root == NULL) {
-        new_node->color = RBTREE_BLACK;
+        new_node = rbtree_new_node(key, data, RBTREE_BLACK);
         return new_node;
     }
 
     rbtree_node_t *p = root, *s = NULL;
     while(p) {
         s = p;
-        if(new_node->key < p->key)
+        if(key < p->key)
             p = p->left;
-        else
+        else if(key > p->key)
             p = p->right;
+        else {
+            p->data = data;
+            return root;
+        }
     }
 
+    new_node = rbtree_new_node(key, data, RBTREE_RED);
     if(new_node->key < s->key) {
         s->left = new_node;
         p = s;
@@ -193,7 +199,7 @@ void rbtree_copy_node(rbtree_node_t *dst, rbtree_node_t *src)
 rbtree_node_t *rbtree_remove_fix_consecutive_red(
     rbtree_node_t *root, rbtree_node_t *n)
 {
-    printf("rbtree_remove_fix_consecutive_red on node %d\n", n->key);
+    //printf("rbtree_remove_fix_consecutive_red on node %d\n", n->key);
     rbtree_node_t *grandparent = rbtree_get_grandparent(n);
     rbtree_node_t *new_root = root, *top;
 
@@ -235,7 +241,7 @@ rbtree_node_t *rbtree_remove_fix_consecutive_red(
 rbtree_node_t *rbtree_remove_fix_negative_red(
     rbtree_node_t *root, rbtree_node_t *n)
 {
-    printf("rbtree_remove_fix_negative_red on node %d\n", n->key);
+    //printf("rbtree_remove_fix_negative_red on node %d\n", n->key);
     rbtree_node_t *n1, *n2, *n3, *n4, *t1, *t2, *t3;
     rbtree_node_t *child, *parent = n->parent;
     if(parent->left == n) {
@@ -297,7 +303,7 @@ rbtree_node_t *rbtree_remove_bubble_up(
     rbtree_node_t *root, rbtree_node_t *parent)
 {
     while(parent) {
-        printf("rbtree_remove_bubble_up on node %d\n", parent->key);
+        //printf("rbtree_remove_bubble_up on node %d\n", parent->key);
         parent->color++;
         parent->left->color--;
         parent->right->color--;
@@ -348,7 +354,7 @@ rbtree_node_t *rbtree_remove_bubble_up(
 
 rbtree_node_t *rbtree_remove_adjust(rbtree_node_t *root, rbtree_node_t *node)
 {
-    printf("rbtree_remove_adjust on node %d\n", node->key);
+    //printf("rbtree_remove_adjust on node %d\n", node->key);
     rbtree_node_t *child = (node->left) ? node->left : node->right;
     rbtree_node_t *new_root;
 
@@ -426,7 +432,7 @@ void rbtree_print_with_depth(rbtree_node_t *n, int depth)
 
     for(d = 0; d < depth; d++)
         putchar(' ');
-    printf("%d:%s\n", n->key, rbtree_color_to_string(n->color));
+    //printf("%d:%s\n", n->key, rbtree_color_to_string(n->color));
     rbtree_print_with_depth(n->left, depth + 1);
     rbtree_print_with_depth(n->right, depth + 1);
 }
@@ -521,11 +527,16 @@ void rbtree_random_test(int test_rounds, int key_range, int add_times,
 
 unsigned int rbtree_hash_string(const char *s)
 {
+    return rbtree_hash_mem((const unsigned char *)s, strlen(s));
+}
+
+unsigned int rbtree_hash_mem(const unsigned char *s, unsigned int size)
+{
     unsigned int seed = 131;
     unsigned int hash = 0;
-    size_t length = strlen(s), i;
+    unsigned int i;
 
-    for(i = 0; i < length; i++) {
+    for(i = 0; i < size; i++) {
         hash = (hash * seed) + s[i];
     }
 

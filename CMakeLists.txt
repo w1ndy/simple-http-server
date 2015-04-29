@@ -11,14 +11,16 @@ set (HDRS
         log.h
         asnet.h
         alarm.h
-        rbtree.h)
+        rbtree.h
+        bufferpool.h)
 
 set (SRCS
         main.c
         log.c
         asnet.c
         alarm.c
-        rbtree.c)
+        rbtree.c
+        bufferpool.c)
 
 add_executable (httpsrv ${HDRS} ${SRCS})
 target_link_libraries (httpsrv ${CMAKE_THREAD_LIBS_INIT})

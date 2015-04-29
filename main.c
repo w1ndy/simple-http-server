@@ -6,6 +6,7 @@
 #include "asnet.h"
 #include "alarm.h"
 #include "rbtree.h"
+#include "bufferpool.h"
 
 void duckduckduck(void *eat)
 {
@@ -19,9 +20,10 @@ int main(int argc, char *argv[])
     log_set_level(LOG_LEVEL_DEBUG);
     DEBUG("httpsrv has started.");
 
+    bufferpool_test();
     //rbtree_random_test(10, 10240, 5000, 5000, 200);
     //rbtree_key_value_test(RBTREE_TEST_MAX_KEY, 50);
-    rbtree_stress_test(1000000);
+    //rbtree_stress_test(1000000);
     //test_rbtree_case();
     /*alarm_init();
     alarm_set(5, duckduckduck, 0);
