@@ -18,11 +18,12 @@ typedef struct
 {
     int block_cnt;
     int block_size;
+    int byte_allocated;
 
     buf_block_t *free_chain;
     buf_block_t *alloc_chain;
 
-    rbtree_t alloc_index;
+    rbtree_t *alloc_index;
     pthread_mutex_t lock;
 } bufferpool_t;
 
@@ -33,7 +34,7 @@ void         *bufferpool_alloc(bufferpool_t *pool);
 void         *bufferpool_alloc_threadsafe(bufferpool_t *pool);
 void          bufferpool_dealloc(bufferpool_t *pool, void *buf);
 void          bufferpool_dealloc_threadsafe(bufferpool_t *pool, void *buf);
-void          bufferpool_free(bufferpool_t *pool);
+void          bufferpool_free(bufferpool_t *pool, int assume_freed);
 void          bufferpool_test();
 
 #endif // __BUFFERPOOL_H__

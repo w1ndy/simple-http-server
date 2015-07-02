@@ -1,10 +1,20 @@
 #include "bufferpool.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <stdint.h>
 
 #include "log.h"
+
+int block_compfunc(const void *a, const void *b)
+{
+    intptr_t pa = (intptr_t)(((const buf_block_t *)a)->data);
+    intptr_t pb = (intptr_t)(((const buf_block_t *)b)->data);
+    if(pa < pb) return -1;
+    else return (pa == pb) ? 0 : 1;
+}
 
 bufferpool_t *bufferpool_create(int size_per_block)
 {
@@ -14,11 +24,12 @@ bufferpool_t *bufferpool_create(int size_per_block)
         ERROR("insufficient memory");
         return NULL;
     }
+    pool->byte_allocated = 0;
     pool->free_chain = NULL;
     pool->alloc_chain = NULL;
     pool->block_cnt = DEFAULT_ALLOCATED_BLOCKS;
     pool->block_size = size_per_block;
-    pool->alloc_index = rbtree_init();
+    pool->alloc_index = rbtree_init(block_compfunc);
     pthread_mutex_init(&pool->lock, 0);
     bufferpool_make_n(pool, DEFAULT_ALLOCATED_BLOCKS);
     return pool;
@@ -38,10 +49,11 @@ int bufferpool_make(bufferpool_t *pool)
         return -1;
     }
 
-    b->alloc_next = (pool->alloc_chain) ? pool->alloc_chain->alloc_next : NULL;
+    b->alloc_next = (pool->alloc_chain) ? pool->alloc_chain : NULL;
     pool->alloc_chain = b;
-    b->free_next = (pool->free_chain) ? pool->free_chain->free_next : NULL;
+    b->free_next = (pool->free_chain) ? pool->free_chain : NULL;
     pool->free_chain = b;
+    pool->byte_allocated += pool->block_size + sizeof(buf_block_t);
 
     return 0;
 }
@@ -51,6 +63,7 @@ int bufferpool_make_n(bufferpool_t *pool, int n)
     int i, cnt = 0;;
     for(i = 0; i < n; i++)
         cnt += (bufferpool_make(pool) == 0) ? 1 : 0;
+    printf("bufferpool: extending pool by %d\n", cnt);
     return cnt;
 }
 
@@ -76,11 +89,10 @@ void *bufferpool_alloc(bufferpool_t *pool)
     b = pool->free_chain;
     pool->free_chain = b->free_next;
     b->free_next = NULL;
-    hash = rbtree_hash_mem((unsigned char *)(&b->data), sizeof(void *));
-    prev = rbtree_find(pool->alloc_index, hash);
+    prev = rbtree_find(pool->alloc_index, b);
     if(prev != NULL)
         b->free_next = prev;
-    pool->alloc_index = rbtree_insert(pool->alloc_index, hash, b);
+    rbtree_insert(pool->alloc_index, b);
     return b->data;
 }
 
@@ -95,20 +107,22 @@ void *bufferpool_alloc_threadsafe(bufferpool_t *pool)
 
 void bufferpool_dealloc(bufferpool_t *pool, void *buf)
 {
-    unsigned int hash = rbtree_hash_mem(
-        (unsigned char *)(&buf), sizeof(void *));
-    buf_block_t *b = rbtree_find(pool->alloc_index, hash);
-    while(b && b->data != buf) b = b->free_next;
+    buf_block_t search_key = { .data = buf };
+    buf_block_t *b = rbtree_find(pool->alloc_index, &search_key),
+                *s = NULL, *head;
+    head = b;
+    while(b && b->data != buf) s = b, b = b->free_next;
     if(b == NULL) {
         WARNING("unassigned buffer deallocating, will be freed directly");
         free(buf);
         return ;
     } else {
-        if(b->free_next)
-            pool->alloc_index = rbtree_insert(
-                pool->alloc_index, hash, b->free_next);
-        else
-            pool->alloc_index = rbtree_remove(pool->alloc_index, hash);
+        if(s != NULL || b->free_next) {
+            if(s) s->free_next = b->free_next, s = head;
+            else s = b->free_next;
+            rbtree_insert(pool->alloc_index, s);
+        } else
+            rbtree_remove(pool->alloc_index, b);
         b->free_next = pool->free_chain;
         pool->free_chain = b;
     }
@@ -121,9 +135,9 @@ void bufferpool_dealloc_threadsafe(bufferpool_t *pool, void *buf)
     pthread_mutex_unlock(&pool->lock);
 }
 
-void bufferpool_free(bufferpool_t *pool)
+void bufferpool_free(bufferpool_t *pool, int assume_freed)
 {
-    if(pool->alloc_index != NULL) {
+    if(!assume_freed && !rbtree_is_empty(pool->alloc_index)) {
         WARNING("some buffer still in use");
     }
 
@@ -152,5 +166,5 @@ void bufferpool_test()
     for(i = 0; i < 5000; i++) {
         bufferpool_dealloc(pool, arr[i]);
     }
-    bufferpool_free(pool);
+    bufferpool_free(pool, 0);
 }

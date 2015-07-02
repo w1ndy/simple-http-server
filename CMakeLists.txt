@@ -13,16 +13,23 @@ set (HDRS
         alarm.h
         rbtree.h
         bufferpool.h
-        conn.h)
+        conn.h
+        dictionary.h
+        http.h)
 
 set (SRCS
-        main.c
         log.c
         asnet.c
         alarm.c
         rbtree.c
         bufferpool.c
-        conn.c)
+        conn.c
+        dictionary.c
+        http.c)
 
-add_executable (httpsrv ${HDRS} ${SRCS})
+add_executable (httpsrv server.c ${HDRS} ${SRCS})
 target_link_libraries (httpsrv ${CMAKE_THREAD_LIBS_INIT})
+add_executable (httpcli client.c ${HDRS} ${SRCS})
+target_link_libraries (httpcli ${CMAKE_THREAD_LIBS_INIT})
+add_executable (test test.c ${HDRS} ${SRCS})
+target_link_libraries (test ${CMAKE_THREAD_LIBS_INIT})

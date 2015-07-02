@@ -7,20 +7,27 @@
 #include <assert.h>
 #include <memory.h>
 
-rbtree_node_t *rbtree_new_node(int key, void *data, int color)
+#include "bufferpool.h"
+
+rbtree_node_t *rbtree_new_node(void *data, int color)
 {
     rbtree_node_t *ret = (rbtree_node_t *)malloc(sizeof(rbtree_node_t));
-    ret->key = key;
     ret->data = data;
     ret->color = color;
+
     ret->parent = NULL;
     ret->left = NULL;
     ret->right = NULL;
+
     return ret;
 }
 
 void rbtree_free_node(rbtree_node_t *n)
 {
+    if(n->left)
+        rbtree_free_node(n->left);
+    if(n->right)
+        rbtree_free_node(n->right);
     free(n);
 }
 
@@ -52,9 +59,12 @@ rbtree_node_t *rbtree_get_sibling(rbtree_node_t *node)
     return NULL;
 }
 
-rbtree_node_t *rbtree_init()
+rbtree_t *rbtree_init(compfunc_t cf)
 {
-    return 0;
+    rbtree_t *t = (rbtree_t*)malloc(sizeof(rbtree_t));
+    t->compfunc = cf;
+    t->root = NULL;
+    return t;
 }
 
 void rbtree_rotate_left(rbtree_node_t *node)
@@ -130,29 +140,32 @@ rbtree_node_t *rbtree_insert_adjust(rbtree_node_t *root, rbtree_node_t *node)
     return root;
 }
 
-rbtree_node_t *rbtree_insert(rbtree_node_t *root, int key, void *data)
+void *rbtree_insert(rbtree_t *tree, void *data)
 {
-    rbtree_node_t *new_node;
-    if(root == NULL) {
-        new_node = rbtree_new_node(key, data, RBTREE_BLACK);
-        return new_node;
+    if(tree->root == NULL) {
+        tree->root = rbtree_new_node(data, RBTREE_BLACK);
+        return NULL;
     }
 
-    rbtree_node_t *p = root, *s = NULL;
+    int cr;
+    rbtree_node_t *p = tree->root, *s = NULL;
+
     while(p) {
         s = p;
-        if(key < p->key)
+        cr = tree->compfunc(data, p->data);
+        if(cr < 0)
             p = p->left;
-        else if(key > p->key)
+        else if(cr > 0)
             p = p->right;
         else {
+            void *old = p->data;
             p->data = data;
-            return root;
+            return old;
         }
     }
 
-    new_node = rbtree_new_node(key, data, RBTREE_RED);
-    if(new_node->key < s->key) {
+    rbtree_node_t *new_node = rbtree_new_node(data, RBTREE_RED);
+    if(cr < 0) {
         s->left = new_node;
         p = s;
         s = s->left;
@@ -164,27 +177,26 @@ rbtree_node_t *rbtree_insert(rbtree_node_t *root, int key, void *data)
         s->parent = p;
     }
 
-    return rbtree_insert_adjust(root, s);
+    tree->root = rbtree_insert_adjust(tree->root, s);
+    return NULL;
 }
 
-rbtree_node_t *rbtree_find_node(rbtree_node_t *root, int key)
+rbtree_node_t *rbtree_find_node(rbtree_t *tree, const void *data)
 {
-    rbtree_node_t *p = root;
-    while(p && p->key != key) {
-        if(p->key < key)
-            p = p->right;
-        else
-            p = p->left;
+    rbtree_node_t *p = tree->root;
+    int cr;
+    while(p) {
+        cr = tree->compfunc(data, p->data);
+        if(cr > 0) p = p->right;
+        else if(cr < 0) p = p->left;
+        else return p;
     }
-    return p;
+    return NULL;
 }
 
 void rbtree_swap_node(rbtree_node_t *a, rbtree_node_t *b)
 {
     rbtree_node_t tmp;
-    tmp.key = a->key;
-    a->key = b->key;
-    b->key = tmp.key;
     tmp.data = a->data;
     a->data = b->data;
     b->data = tmp.data;
@@ -192,7 +204,6 @@ void rbtree_swap_node(rbtree_node_t *a, rbtree_node_t *b)
 
 void rbtree_copy_node(rbtree_node_t *dst, rbtree_node_t *src)
 {
-    dst->key = src->key;
     dst->data = src->data;
 }
 
@@ -384,30 +395,28 @@ rbtree_node_t *rbtree_remove_adjust(rbtree_node_t *root, rbtree_node_t *node)
     return new_root;
 }
 
-rbtree_node_t *rbtree_remove(rbtree_node_t *root, int key)
+void rbtree_remove(rbtree_t *tree, const void *data)
 {
-    rbtree_node_t *p = rbtree_find_node(root, key), *s, *new_root;
-    if(!p) return root;
+    assert(tree && "tree is null");
+    rbtree_node_t *p = rbtree_find_node(tree, data), *s;
+    if(!p) return ;
 
     if(p->right && p->left) {
         s = p->right;
         while(s->left) s = s->left;
         rbtree_copy_node(p, s);
-        new_root = rbtree_remove_adjust(root, s);
+        tree->root = rbtree_remove_adjust(tree->root, s);
         free(s);
     } else {
-        new_root = rbtree_remove_adjust(root, p);
+        tree->root = rbtree_remove_adjust(tree->root, p);
         free(p);
     }
-    return new_root;
 }
 
-void *rbtree_find(rbtree_node_t *root, int key)
+void *rbtree_find(rbtree_t *tree, const void *data)
 {
-    rbtree_node_t *p = rbtree_find_node(root, key);
-    if(p)
-        return p->data;
-    return NULL;
+    rbtree_node_t *p = rbtree_find_node(tree, data);
+    return p ? p->data : NULL;
 }
 
 const char *rbtree_color_to_string(int color)
@@ -437,17 +446,16 @@ void rbtree_print_with_depth(rbtree_node_t *n, int depth)
     rbtree_print_with_depth(n->right, depth + 1);
 }
 
-void rbtree_print(rbtree_node_t *root)
+void rbtree_print(rbtree_t *tree)
 {
-    rbtree_print_with_depth(root, 0);
+    rbtree_print_with_depth(tree->root, 0);
 }
 
-void rbtree_free(rbtree_node_t *root)
+void rbtree_free(rbtree_t *tree)
 {
-    if(!root) return ;
-    rbtree_free(root->left);
-    rbtree_free(root->right);
-    rbtree_free_node(root);
+    if(tree->root)
+        rbtree_free_node(tree->root);
+    free(tree);
 }
 
 int rbtree_check_node_properties(rbtree_node_t *n)
@@ -474,40 +482,63 @@ int rbtree_check_node_properties(rbtree_node_t *n)
     int cnt_right = rbtree_check_node_properties(n->right);
     if(cnt_right == -1) return -1;
 
-    if(cnt_left != cnt_right) {
-        assert(0 && "rbtree_check_node_properties: unbalanced black child nodes");
-        return -1;
-    }
+    assert(cnt_left == cnt_right && "rbtree_check_node_properties: unbalanced black child nodes");
     return cnt_left + cnt_right + (n->color == RBTREE_BLACK) ? 1 : 0;
 }
 
-int rbtree_validate(rbtree_node_t *root)
+int rbtree_validate(rbtree_t *tree)
 {
-    if(!root) return 0;
-    if(root->color != RBTREE_BLACK) {
-        assert(0 && "rbtree_validate: root is red");
-        return -1;
-    }
-    return rbtree_check_node_properties(root);
+    assert(tree && "tree is null");
+    if(!tree->root) return 0;
+    assert(tree->root->color == RBTREE_BLACK
+        && "rbtree_validate: root is red");
+    return rbtree_check_node_properties(tree->root);
+}
+
+int rbtree_is_empty(rbtree_t *tree)
+{
+    return (tree->root == NULL);
+}
+
+void *rbtree_find_max(rbtree_t *tree)
+{
+    rbtree_node_t *p = tree->root;
+    while(p && p->right) p = p->right;
+    return p ? p->data : NULL;
+}
+
+void *rbtree_find_min(rbtree_t *tree)
+{
+    rbtree_node_t *p = tree->root;
+    while(p && p->left) p = p->left;
+    return p ? p->data : NULL;
 }
 
 void rbtree_random_test(int test_rounds, int key_range, int add_times,
                         int remove_times, int shuffle_times)
 {
-    rbtree_node_t *root;
+    rbtree_t *tree;
     int keys[RBTREE_TEST_MAX_KEY], key_cnt = 0, i, j, k, x, y;
+
+    int intcompfunc(const void *a, const void *b) {
+        const int *ia = (const int *)a;
+        const int *ib = (const int *)b;
+        if(*ia < *ib) return -1;
+        else if(*ia > *ib) return 1;
+        else return 0;
+    }
 
     assert(add_times <= RBTREE_TEST_MAX_KEY && "too many keys");
     for(i = 0; i < test_rounds; i++) {
         key_cnt = 0;
         printf("round #%d\n", i + 1);
-        root = rbtree_init();
+        tree = rbtree_init(intcompfunc);
         for(j = 0; j < add_times; j++) {
             k = rand() % key_range;
             printf("inserting %d...\n", k);
-            root = rbtree_insert(root, k, 0);
-            rbtree_validate(root);
             keys[key_cnt++] = k;
+            rbtree_insert(tree, &keys[key_cnt - 1]);
+            rbtree_validate(tree);
         }
         for(j = 0; j < shuffle_times; j++) {
             x = rand() % key_cnt;
@@ -518,10 +549,10 @@ void rbtree_random_test(int test_rounds, int key_range, int add_times,
         }
         for(j = 0; j < remove_times; j++) {
             printf("removing %d...\n", keys[j]);
-            root = rbtree_remove(root, keys[j]);
-            rbtree_validate(root);
+            rbtree_remove(tree, &keys[j]);
+            rbtree_validate(tree);
         }
-        rbtree_free(root);
+        rbtree_free(tree);
     }
 }
 
@@ -543,73 +574,43 @@ unsigned int rbtree_hash_mem(const unsigned char *s, unsigned int size)
     return (hash & 0x7FFFFFFF);
 }
 
-struct key_value_pair_t {
-    char key[11];
-    char value[11];
-
-    struct key_value_pair_t *next;
-};
-
-void rbtree_key_value_test(int key_count, int tests)
-{
-    int i, j, c;
-    rbtree_t root = rbtree_init();
-    struct key_value_pair_t pairs[RBTREE_TEST_MAX_KEY];
-    for(i = 0; i < key_count; i++) {
-        for(j = 0; j < 10; j++) {
-            c = rand() % 52;
-            pairs[i].key[j] = (c >= 26) ? (c - 26) + 'A' : c + 'a';
-            c = rand() % 52;
-            pairs[i].value[j] = (c >= 26) ? (c - 26) + 'A' : c + 'a';
-        }
-        pairs[i].key[j] = '\0';
-        pairs[i].value[j] = '\0';
-        pairs[i].next = NULL;
-
-        unsigned int hash = rbtree_hash_string(pairs[i].key);
-        printf("adding %s=%s (hash %d) to set\n",
-            pairs[i].key, pairs[i].value, hash);
-        struct key_value_pair_t *ptr = rbtree_find(root, hash);
-        if(ptr) {
-            puts("warning: string hash nested");
-            while(ptr->next) ptr = ptr->next;
-            ptr->next = &pairs[i];
-        } else {
-            root = rbtree_insert(root, hash, &pairs[i]);
-        }
-    }
-    puts("insertion done");
-    for(i = 0; i < tests; i++) {
-        j = rand() % key_count;
-        unsigned int hash = rbtree_hash_string(pairs[j].key);
-        struct key_value_pair_t *ptr = rbtree_find(root, hash);
-        assert(ptr && "key not found");
-        while(ptr) {
-            if(strcmp(ptr->key, pairs[j].key) == 0) break;
-        }
-        assert(ptr && "data retrieved but key not found");
-        assert(!strcmp(ptr->value, pairs[j].value) && "value not match");
-        printf("value located: %s = %s\n", ptr->key, ptr->value);
-    }
-}
-
 void rbtree_stress_test(int key_count)
 {
-    rbtree_t root = rbtree_init();
+    struct tag_rbtest_item {
+        int value;
+    };
+
+    int compfunc(const void *a, const void *b)
+    {
+        struct tag_rbtest_item *tria = (struct tag_rbtest_item *) a;
+        struct tag_rbtest_item *trib = (struct tag_rbtest_item *) b;
+        if(tria->value < trib->value) return -1;
+        else return (tria->value == trib->value) ? 0 : 1;
+    }
+
+    rbtree_t *tree = rbtree_init(compfunc);
     int i;
+    bufferpool_t *pool = bufferpool_create(sizeof(struct tag_rbtest_item));
+
     clock_t begin = clock();
     for(i = 0; i < key_count; i++) {
-        root = rbtree_insert(root, rand(), 0);
+        printf("inserting #%d\n", i);
+        struct tag_rbtest_item *item = bufferpool_alloc(pool);
+        item->value = rand();
+        rbtree_insert(tree, item);
     }
     clock_t end = clock();
     printf("%d insertion cost %.2f sec\n", key_count,
         (float)(end - begin) / CLOCKS_PER_SEC);
 
+    struct tag_rbtest_item search_key;
     begin = clock();
     for(i = 0; i < key_count; i++) {
-        rbtree_find(root, rand());
+        search_key.value = rand();
+        rbtree_find(tree, &search_key);
     }
     end = clock();
     printf("%d retrival cost %.2f sec\n", key_count,
         (float)(end - begin) / CLOCKS_PER_SEC);
+    bufferpool_free(pool, 1);
 }

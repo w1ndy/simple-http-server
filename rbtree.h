@@ -8,9 +8,10 @@
 
 #define RBTREE_TEST_MAX_KEY 5000
 
+typedef int (*compfunc_t)(const void *a, const void *b);
+
 typedef struct tag_rbtree_node
 {
-    int key;
     void *data;
     int color;
     struct tag_rbtree_node *parent;
@@ -18,23 +19,31 @@ typedef struct tag_rbtree_node
     struct tag_rbtree_node *right;
 } rbtree_node_t;
 
-typedef struct tag_rbtree_node *rbtree_t;
+typedef struct tag_rbtree_t
+{
+    compfunc_t compfunc;
+    rbtree_node_t *root;
+} rbtree_t;
 
-rbtree_t       rbtree_init();
-rbtree_t       rbtree_insert(rbtree_t root, int key, void *data);
-rbtree_t       rbtree_remove(rbtree_t root, int key);
-rbtree_t       rbtree_new_node(int key, void *data, int color);
-int            rbtree_validate(rbtree_t root);
-void          *rbtree_find(rbtree_t root, int key);
-void           rbtree_free(rbtree_t root);
-void           rbtree_print(rbtree_t root);
+rbtree_t      *rbtree_init(compfunc_t cf);
+void          *rbtree_insert(rbtree_t *tree, void *data);
+void           rbtree_remove(rbtree_t *tree, const void *data);
+rbtree_node_t *rbtree_new_node(void *data, int color);
+int            rbtree_validate(rbtree_t *tree);
+int            rbtree_is_empty(rbtree_t *tree);
+rbtree_node_t *rbtree_find_node(rbtree_t *tree, const void *data);
+void          *rbtree_find(rbtree_t *tree, const void *data);
+void          *rbtree_find_max(rbtree_t *tree);
+void          *rbtree_find_min(rbtree_t *tree);
+void           rbtree_free(rbtree_t *tree);
+void           rbtree_print(rbtree_t *tree);
+
 unsigned int   rbtree_hash_string(const char *s);
 unsigned int   rbtree_hash_mem(const unsigned char *s, unsigned int size);
 
 void           rbtree_random_test(int test_rounds, int key_range,
                                   int add_times, int remove_times,
                                   int shuffle_times);
-void           rbtree_key_value_test(int key_count, int tests);
 void           rbtree_stress_test(int key_count);
 
 #endif // __RBTREE_H__
